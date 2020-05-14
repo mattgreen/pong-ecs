@@ -1,0 +1,16 @@
+[package]
+name = "ecs"
+version = "0.1.0"
+authors = ["Matt Green <mattgreenrocks@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+legion = "0.2.1"
+simple-matrix = "0.1.2"
+
+[dependencies.sdl2]
+version = "0.34.0"
+default-features = false
+features = ["gfx"]
