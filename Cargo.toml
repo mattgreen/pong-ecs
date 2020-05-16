@@ -13,4 +13,4 @@ simple-matrix = "0.1.2"
 [dependencies.sdl2]
 version = "0.34.0"
 default-features = false
-features = ["gfx"]
+features = ["gfx", "ttf"]
