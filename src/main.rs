@@ -9,20 +9,22 @@ use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::Canvas;
-use sdl2::surface::Surface;
 use sdl2::ttf::Font;
 use sdl2::video::Window;
 use sdl2::EventPump;
 
-static WIDTH: i32 = 800;
-static HEIGHT: i32 = 600;
+static GAME_WIDTH: f32 = 800.0;
+static GAME_HEIGHT: f32 = 450.0;
 
-static PADDLE_WIDTH: i32 = 20;
-static PADDLE_HEIGHT: i32 = 80;
-static PADDLE_MOVE_SPEED: i32 = 8;
+static WINDOW_WIDTH: u32 = 800;
+static WINDOW_HEIGHT: u32 = 600;
 
-static BALL_WIDTH: i32 = 20;
-static BALL_HEIGHT: i32 = 20;
+static PADDLE_WIDTH: f32 = 20.0;
+static PADDLE_HEIGHT: f32 = 80.0;
+static PADDLE_MOVE_SPEED: f32 = 8.0;
+
+static BALL_WIDTH: f32 = 20.0;
+static BALL_HEIGHT: f32 = 20.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Ball;
@@ -32,10 +34,10 @@ struct Paddle;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Position {
-    x: i32,
-    y: i32,
-    width: i32,
-    height: i32,
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -46,8 +48,8 @@ struct Score {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Velocity {
-    dx: i32,
-    dy: i32,
+    dx: f32,
+    dy: f32,
 }
 
 enum Collision {
@@ -68,10 +70,10 @@ enum Player {
 fn collide(world: &mut World) {
     // Paddle + game area collision handling
     for mut paddle in <Write<Position>>::query().filter(tag_value(&Paddle)).iter(world) {
-        if paddle.y < 0 {
-            paddle.y = 0;
-        } else if (paddle.y + paddle.height) > HEIGHT {
-            paddle.y = HEIGHT - paddle.height;
+        if paddle.y < 0.0 {
+            paddle.y = 0.0;
+        } else if (paddle.y + paddle.height) > GAME_HEIGHT {
+            paddle.y = GAME_HEIGHT - paddle.height;
         }
     }
 
@@ -83,21 +85,21 @@ fn collide(world: &mut World) {
         .unwrap();
 
     let collision = {
-        if ball.x < 0 {
+        if ball.x < 0.0 {
             Some(Collision::ScoreWall(Player::First))
-        } else if (ball.x + ball.width) > WIDTH {
+        } else if (ball.x + ball.width) > GAME_WIDTH {
             Some(Collision::ScoreWall(Player::Second))
         } else {
-            if ball.y < 0 {
+            if ball.y < 0.0 {
                 Some(Collision::Bounce(Bounce::Vertical))
-            } else if (ball.y + ball.height) > HEIGHT {
+            } else if (ball.y + ball.height) > GAME_HEIGHT {
                 Some(Collision::Bounce(Bounce::Vertical))
             } else {
                 let mut c = None;
 
-                let ball_bounds = Rect::new(ball.x, ball.y, ball.width as u32, ball.height as u32);
+                let ball_bounds = Rect::new(ball.x as i32, ball.y as i32, ball.width as u32, ball.height as u32);
                 for paddle in <Read<Position>>::query().filter(tag_value(&Paddle)).iter(world) {
-                    let bounds = Rect::new(paddle.x, paddle.y, paddle.width as u32, paddle.height as u32);
+                    let bounds = Rect::new(paddle.x as i32, paddle.y as i32, paddle.width as u32, paddle.height as u32);
                     
                     if ball_bounds.intersection(bounds).is_some() {
                         c = Some(Collision::Bounce(Bounce::Horizontal));
@@ -121,10 +123,10 @@ fn collide(world: &mut World) {
                 }
 
                 for (mut ball_pos, mut ball_vel) in <(Write<Position>, Write<Velocity>)>::query().filter(tag_value(&Ball)).filter(tag_value(&Ball)).iter(world) {
-                    ball_pos.x = 150;
-                    ball_pos.y = 150;
-                    ball_vel.dx = 3;
-                    ball_vel.dy = 4;
+                    ball_pos.x = 150.0;
+                    ball_pos.y = 150.0;
+                    ball_vel.dx = 3.0;
+                    ball_vel.dy = 4.0;
                 }
             },
             Collision::Bounce(b) => {
@@ -136,10 +138,10 @@ fn collide(world: &mut World) {
 
                 match b {
                     Bounce::Horizontal => { 
-                        ball_vel.dx *= -1
+                        ball_vel.dx *= -1.0;
                     },
                     Bounce::Vertical => {
-                        ball_vel.dy *= -1
+                        ball_vel.dy *= -1.0;
                     },
                 }
             },
@@ -153,19 +155,22 @@ fn draw(world: &World, font: &Font, canvas: &mut Canvas<Window>) {
 
     canvas.set_draw_color(Color::RGB(255, 255, 255));
     for pos in <Read<Position>>::query().iter_immutable(world) {
-        canvas.fill_rect(Rect::new(pos.x, pos.y, pos.width as u32, pos.height as u32));
+        canvas.fill_rect(Rect::new(pos.x as i32, pos.y as i32, pos.width as u32, pos.height as u32)).unwrap();
     }
 
+    canvas.fill_rect(Rect::new(0, GAME_HEIGHT as i32, GAME_WIDTH as u32, 4));
+
     for score in <Read<Score>>::query().iter_immutable(world) {
-        let s = format!("{} - {}", score.p1, score.p2);
+        let s = format!("{:02} - {:02}", score.p1, score.p2);
         let surface = font.render(&s).blended(Color::WHITE).unwrap();
         let texture_creator = canvas.texture_creator();
         let texture = texture_creator.create_texture_from_surface(surface).unwrap();
 
         let (width, height) = font.size_of(&s).unwrap();
-        let target = Rect::new(325, 0, width, height);
-
+        let target = Rect::new(305, GAME_HEIGHT as i32 + 20, width, height);
+        
         canvas.copy(&texture, None, Some(target)).unwrap();
+        // canvas.draw_rect(target);
     }
 
     canvas.present();
@@ -187,7 +192,7 @@ fn input(world: &mut World, event_pump: &mut EventPump, p1: Entity, p2: Entity) 
                 ..
             } => {
                 let mut p1_vel = world.get_component_mut::<Velocity>(p1).unwrap();
-                p1_vel.dy = 0;
+                p1_vel.dy = 0.0;
             }
             Event::KeyDown {
                 keycode: Some(Keycode::W),
@@ -201,7 +206,7 @@ fn input(world: &mut World, event_pump: &mut EventPump, p1: Entity, p2: Entity) 
                 ..
             } => {
                 let mut p1_vel = world.get_component_mut::<Velocity>(p1).unwrap();
-                p1_vel.dy = 0;
+                p1_vel.dy = 0.0;
             }
             Event::KeyDown {
                 keycode: Some(Keycode::Down),
@@ -215,7 +220,7 @@ fn input(world: &mut World, event_pump: &mut EventPump, p1: Entity, p2: Entity) 
                 ..
             } => {
                 let mut p2_vel = world.get_component_mut::<Velocity>(p2).unwrap();
-                p2_vel.dy = 0;
+                p2_vel.dy = 0.0;
             }
             Event::KeyDown {
                 keycode: Some(Keycode::Up),
@@ -229,7 +234,7 @@ fn input(world: &mut World, event_pump: &mut EventPump, p1: Entity, p2: Entity) 
                 ..
             } => {
                 let mut p2_vel = world.get_component_mut::<Velocity>(p2).unwrap();
-                p2_vel.dy = 0;
+                p2_vel.dy = 0.0;
             }
 
             _ => {}
@@ -240,8 +245,7 @@ fn input(world: &mut World, event_pump: &mut EventPump, p1: Entity, p2: Entity) 
 }
 
 fn tick(world: &mut World) {
-    let query = <(Read<Velocity>, Write<Position>)>::query();
-    for (vel, mut pos) in query.iter(world) {
+    for (vel, mut pos) in <(Read<Velocity>, Write<Position>)>::query().iter(world) {
         pos.x += vel.dx;
         pos.y += vel.dy;
     }
@@ -255,7 +259,7 @@ fn main() {
     let window = ctx
         .video()
         .unwrap()
-        .window("Pong", WIDTH as u32, HEIGHT as u32)
+        .window("Pong", WINDOW_WIDTH, WINDOW_HEIGHT)
         .position_centered()
         .build()
         .unwrap();
@@ -270,12 +274,12 @@ fn main() {
         (Ball,),
         vec![(
             Position {
-                x: 150,
-                y: 150,
+                x: 150.0,
+                y: 150.0,
                 width: BALL_WIDTH,
                 height: BALL_HEIGHT,
             },
-            Velocity { dx: 3, dy: 2 },
+            Velocity { dx: 3.0, dy: 2.0 },
         )],
     )[0];
 
@@ -283,12 +287,12 @@ fn main() {
         (Paddle,),
         vec![(
             Position {
-                x: 80,
-                y: 40,
+                x: 80.0,
+                y: 40.0,
                 width: PADDLE_WIDTH,
                 height: PADDLE_HEIGHT,
             },
-            Velocity { dx: 0, dy: 0 },
+            Velocity { dx: 0.0, dy: 0.0 },
         )],
     )[0];
 
@@ -296,12 +300,12 @@ fn main() {
         (Paddle,),
         vec![(
             Position {
-                x: WIDTH - PADDLE_WIDTH - 80,
-                y: 40,
+                x: GAME_WIDTH - PADDLE_WIDTH - 80.0,
+                y: 40.0,
                 width: PADDLE_WIDTH,
                 height: PADDLE_HEIGHT,
             },
-            Velocity { dx: 0, dy: 0 },
+            Velocity { dx: 0.0, dy: 0.0 },
         )],
     )[0];
 
