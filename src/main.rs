@@ -67,6 +67,14 @@ enum Player {
     Second
 }
 
+fn accelerate(v: f32, amount: f32) -> f32 {
+    if v < 0.0 {
+        v - amount
+    } else {
+        v + amount
+    }
+}
+
 fn collide(world: &mut World) {
     // Paddle + game area collision handling
     for mut paddle in <Write<Position>>::query().filter(tag_value(&Paddle)).iter(world) {
@@ -139,9 +147,11 @@ fn collide(world: &mut World) {
                 match b {
                     Bounce::Horizontal => { 
                         ball_vel.dx *= -1.0;
+                        ball_vel.dx = accelerate(ball_vel.dx, 0.2);
                     },
                     Bounce::Vertical => {
                         ball_vel.dy *= -1.0;
+                        ball_vel.dy = accelerate(ball_vel.dy, 0.2);
                     },
                 }
             },
@@ -158,7 +168,7 @@ fn draw(world: &World, font: &Font, canvas: &mut Canvas<Window>) {
         canvas.fill_rect(Rect::new(pos.x as i32, pos.y as i32, pos.width as u32, pos.height as u32)).unwrap();
     }
 
-    canvas.fill_rect(Rect::new(0, GAME_HEIGHT as i32, GAME_WIDTH as u32, 4));
+    canvas.fill_rect(Rect::new(0, GAME_HEIGHT as i32, GAME_WIDTH as u32, 4)).unwrap();
 
     for score in <Read<Score>>::query().iter_immutable(world) {
         let s = format!("{:02} - {:02}", score.p1, score.p2);
@@ -314,7 +324,7 @@ fn main() {
     )]);
 
     let mut fps_manager = FPSManager::new();
-    fps_manager.set_framerate(60);
+    fps_manager.set_framerate(60).unwrap();
 
     loop {
         if input(&mut world, &mut event_pump, p1, p2) {
