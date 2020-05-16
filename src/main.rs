@@ -310,7 +310,7 @@ fn main() {
         (Paddle,),
         vec![(
             Position {
-                x: GAME_WIDTH - PADDLE_WIDTH - 80.0,
+                x: GAME_WIDTH - PADDLE_WIDTH - 100.0,
                 y: 40.0,
                 width: PADDLE_WIDTH,
                 height: PADDLE_HEIGHT,
