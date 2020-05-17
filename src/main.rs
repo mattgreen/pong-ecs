@@ -1,10 +1,12 @@
 extern crate legion;
 extern crate sdl2;
 
+use std::time::{Duration, Instant};
+use std::thread;
+
 use legion::prelude::*;
 
 use sdl2::event::Event;
-use sdl2::gfx::framerate::FPSManager;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
@@ -21,8 +23,10 @@ static WINDOW_HEIGHT: u32 = 600;
 
 static PADDLE_WIDTH: f32 = 20.0;
 static PADDLE_HEIGHT: f32 = 80.0;
-static PADDLE_MOVE_SPEED: f32 = 8.0;
+static PADDLE_MOVE_SPEED: f32 = 480.0;
 
+static BALL_START_SPEED: f32 = 180.0;
+static BALL_SPEED_BOOST: f32 = 12.0;
 static BALL_WIDTH: f32 = 20.0;
 static BALL_HEIGHT: f32 = 20.0;
 
@@ -133,8 +137,8 @@ fn collide(world: &mut World) {
                 for (mut ball_pos, mut ball_vel) in <(Write<Position>, Write<Velocity>)>::query().filter(tag_value(&Ball)).filter(tag_value(&Ball)).iter(world) {
                     ball_pos.x = 150.0;
                     ball_pos.y = 150.0;
-                    ball_vel.dx = 3.0;
-                    ball_vel.dy = 4.0;
+                    ball_vel.dx = BALL_START_SPEED;
+                    ball_vel.dy = BALL_START_SPEED * 1.25;
                 }
             },
             Collision::Bounce(b) => {
@@ -147,11 +151,11 @@ fn collide(world: &mut World) {
                 match b {
                     Bounce::Horizontal => { 
                         ball_vel.dx *= -1.0;
-                        ball_vel.dx = accelerate(ball_vel.dx, 0.2);
+                        ball_vel.dx = accelerate(ball_vel.dx, BALL_SPEED_BOOST);
                     },
                     Bounce::Vertical => {
                         ball_vel.dy *= -1.0;
-                        ball_vel.dy = accelerate(ball_vel.dy, 0.2);
+                        ball_vel.dy = accelerate(ball_vel.dy, BALL_SPEED_BOOST);
                     },
                 }
             },
@@ -159,7 +163,7 @@ fn collide(world: &mut World) {
     }
 }
 
-fn draw(world: &World, font: &Font, canvas: &mut Canvas<Window>) {
+fn draw(world: &World, font: &Font, canvas: &mut Canvas<Window>, buffer: &mut Vec<u8>) {
     canvas.set_draw_color(Color::RGB(0, 0, 0));
     canvas.clear();
 
@@ -171,8 +175,14 @@ fn draw(world: &World, font: &Font, canvas: &mut Canvas<Window>) {
     canvas.fill_rect(Rect::new(0, GAME_HEIGHT as i32, GAME_WIDTH as u32, 4)).unwrap();
 
     for score in <Read<Score>>::query().iter_immutable(world) {
-        let s = format!("{:02} - {:02}", score.p1, score.p2);
-        let surface = font.render(&s).blended(Color::WHITE).unwrap();
+        use std::io::Write;
+        use std::str;
+
+        buffer.clear();
+        write!(buffer, "{:02} - {:02}", score.p1, score.p2).unwrap();
+        let s = unsafe { str::from_utf8_unchecked(&buffer[..]) };
+
+        let surface = font.render(s).blended(Color::WHITE).unwrap();
         let texture_creator = canvas.texture_creator();
         let texture = texture_creator.create_texture_from_surface(surface).unwrap();
 
@@ -180,7 +190,6 @@ fn draw(world: &World, font: &Font, canvas: &mut Canvas<Window>) {
         let target = Rect::new(305, GAME_HEIGHT as i32 + 20, width, height);
         
         canvas.copy(&texture, None, Some(target)).unwrap();
-        // canvas.draw_rect(target);
     }
 
     canvas.present();
@@ -254,10 +263,10 @@ fn input(world: &mut World, event_pump: &mut EventPump, p1: Entity, p2: Entity) 
     return false;
 }
 
-fn tick(world: &mut World) {
+fn tick(world: &mut World, dt: f32) {
     for (vel, mut pos) in <(Read<Velocity>, Write<Position>)>::query().iter(world) {
-        pos.x += vel.dx;
-        pos.y += vel.dy;
+        pos.x += vel.dx * dt;
+        pos.y += vel.dy * dt;
     }
 }
 
@@ -271,8 +280,11 @@ fn main() {
         .unwrap()
         .window("Pong", WINDOW_WIDTH, WINDOW_HEIGHT)
         .position_centered()
+        .opengl()
         .build()
         .unwrap();
+
+    let mut text = vec![0 as u8; 0];
 
     let mut canvas = window.into_canvas().build().unwrap();
     let mut event_pump = ctx.event_pump().unwrap();
@@ -289,7 +301,7 @@ fn main() {
                 width: BALL_WIDTH,
                 height: BALL_HEIGHT,
             },
-            Velocity { dx: 3.0, dy: 2.0 },
+            Velocity { dx: BALL_START_SPEED, dy: BALL_START_SPEED * 1.25 },
         )],
     )[0];
 
@@ -323,18 +335,25 @@ fn main() {
         Score { p1: 0, p2: 0},
     )]);
 
-    let mut fps_manager = FPSManager::new();
-    fps_manager.set_framerate(60).unwrap();
+    let time_per_frame = Duration::from_micros(16670);
 
     loop {
+        let start = Instant::now();
         if input(&mut world, &mut event_pump, p1, p2) {
             break;
         }
 
-        tick(&mut world);
+        tick(&mut world, time_per_frame.as_secs_f32());
         collide(&mut world);
-        draw(&world, &font, &mut canvas);
+        draw(&world, &font, &mut canvas, &mut text);
 
-        fps_manager.delay();
+        let elapsed = start.elapsed();
+        let sleep_time = if elapsed < time_per_frame {
+            time_per_frame - elapsed
+        } else {
+            Duration::from_nanos(0)
+        };
+
+        thread::sleep(sleep_time);
     }
 }
